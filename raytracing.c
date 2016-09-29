@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <pthread.h>
 
 #include "math-toolkit.h"
 #include "primitives.h"
@@ -23,9 +24,9 @@ static int raySphereIntersection(const point3 ray_e,
                                  intersection *ip, double *t1)
 {
     point3 l;
-    subtract_vector(sph->center, ray_e, l);
-    double s = dot_product(l, ray_d);
-    double l2 = dot_product(l, l);
+    SUB_VEC(sph->center, ray_e, l);
+    double s = DOT(l, ray_d);
+    double l2 = DOT(l, l);
     double r2 = sph->radius * sph->radius;
 
     if (s < 0 && l2 > r2)
@@ -36,13 +37,13 @@ static int raySphereIntersection(const point3 ray_e,
     float q = sqrt(r2 - m2);
     *t1 = (l2 > r2) ? (s - q) : (s + q);
     /* p = e + t1 * d */
-    multiply_vector(ray_d, *t1, ip->point);
-    add_vector(ray_e, ip->point, ip->point);
+    MVEC(ray_d, *t1, ip->point);
+    ADD(ray_e, ip->point, ip->point);
 
-    subtract_vector(ip->point, sph->center, ip->normal);
+    SUB_VEC(ip->point, sph->center, ip->normal);
     normalize(ip->normal);
-    if (dot_product(ip->normal, ray_d) > 0.0)
-        multiply_vector(ip->normal, -1, ip->normal);
+    if (DOT(ip->normal, ray_d) > 0.0)
+        MVEC(ip->normal, -1, ip->normal);
     return 1;
 }
 
@@ -53,12 +54,12 @@ static int rayRectangularIntersection(const point3 ray_e,
                                       intersection *ip, double *t1)
 {
     point3 e01, e03, p;
-    subtract_vector(rec->vertices[1], rec->vertices[0], e01);
-    subtract_vector(rec->vertices[3], rec->vertices[0], e03);
+    SUB_VEC(rec->vertices[1], rec->vertices[0], e01);
+    SUB_VEC(rec->vertices[3], rec->vertices[0], e03);
 
-    cross_product(ray_d, e03, p);
+    CDOT(ray_d, e03, p);
 
-    double det = dot_product(e01, p);
+    double det = DOT(e01, p);
 
     /* Reject rays orthagonal to the normal vector.
      * I.e. rays parallell to the plane.
@@ -69,59 +70,59 @@ static int rayRectangularIntersection(const point3 ray_e,
     double inv_det = 1.0 / det;
 
     point3 s;
-    subtract_vector(ray_e, rec->vertices[0], s);
+    SUB_VEC(ray_e, rec->vertices[0], s);
 
-    double alpha = inv_det * dot_product(s, p);
+    double alpha = inv_det * DOT(s, p);
 
     if ((alpha > 1.0) || (alpha < 0.0))
         return 0;
 
     point3 q;
-    cross_product(s, e01, q);
+    CDOT(s, e01, q);
 
-    double beta = inv_det * dot_product(ray_d, q);
+    double beta = inv_det * DOT(ray_d, q);
     if ((beta > 1.0) || (beta < 0.0))
         return 0;
 
-    *t1 = inv_det * dot_product(e03, q);
+    *t1 = inv_det * DOT(e03, q);
 
     if (alpha + beta > 1.0f) {
         /* for the second triangle */
         point3 e23, e21;
-        subtract_vector(rec->vertices[3], rec->vertices[2], e23);
-        subtract_vector(rec->vertices[1], rec->vertices[2], e21);
+        SUB_VEC(rec->vertices[3], rec->vertices[2], e23);
+        SUB_VEC(rec->vertices[1], rec->vertices[2], e21);
 
-        cross_product(ray_d, e21, p);
+        CDOT(ray_d, e21, p);
 
-        det = dot_product(e23, p);
+        det = DOT(e23, p);
 
         if (det < 1e-4)
             return 0;
 
         inv_det = 1.0 / det;
-        subtract_vector(ray_e, rec->vertices[2], s);
+        SUB_VEC(ray_e, rec->vertices[2], s);
 
-        alpha = inv_det * dot_product(s, p);
+        alpha = inv_det * DOT(s, p);
         if (alpha < 0.0)
             return 0;
 
-        cross_product(s, e23, q);
-        beta = inv_det * dot_product(ray_d, q);
+        CDOT(s, e23, q);
+        beta = inv_det * DOT(ray_d, q);
 
         if ((beta < 0.0) || (beta + alpha > 1.0))
             return 0;
 
-        *t1 = inv_det * dot_product(e21, q);
+        *t1 = inv_det * DOT(e21, q);
     }
 
     if (*t1 < 1e-4)
         return 0;
 
     COPY_POINT3(ip->normal, rec->normal);
-    if (dot_product(ip->normal, ray_d)>0.0)
-        multiply_vector(ip->normal, -1, ip->normal);
-    multiply_vector(ray_d, *t1, ip->point);
-    add_vector(ray_e, ip->point, ip->point);
+    if (DOT(ip->normal, ray_d)>0.0)
+        MVEC(ip->normal, -1, ip->normal);
+    MVEC(ray_d, *t1, ip->point);
+    ADD(ray_e, ip->point, ip->point);
 
     return 1;
 }
@@ -138,20 +139,20 @@ static void localColor(color local_color,
      */
 
     COPY_COLOR(diff, fill->fill_color);
-    multiply_vector(diff, fill->Kd, diff);
-    multiply_vector(diff, diffuse, diff);
+    MVEC(diff, fill->Kd, diff);
+    MVEC(diff, diffuse, diff);
     COPY_COLOR(lightCo, light_color);
-    multiply_vectors(diff, lightCo, diff);
+    MVECS(diff, lightCo, diff);
 
     COPY_COLOR(spec, light_color);
-    multiply_vector(spec, fill->Ks, spec);
-    multiply_vector(spec, specular, spec);
+    MVEC(spec, fill->Ks, spec);
+    MVEC(spec, specular, spec);
 
     COPY_COLOR(surface, fill->fill_color);
-    multiply_vectors(ambi,surface, ambi);
-    add_vector(diff, ambi, diff);
-    add_vector(diff, spec, diff);
-    add_vector(local_color, diff, local_color);
+    MVECS(ambi,surface, ambi);
+    ADD(diff, ambi, diff);
+    ADD(diff, spec, diff);
+    ADD(local_color, diff, local_color);
 }
 
 /* @param d direction of the ray into intersection
@@ -167,26 +168,26 @@ static void compute_specular_diffuse(double *diffuse,
 
     /* Calculate vector to eye V */
     COPY_POINT3(d_copy, d);
-    multiply_vector(d_copy, -1, d_copy);
+    MVEC(d_copy, -1, d_copy);
     normalize(d_copy);
 
     /* Calculate vector to light L */
     COPY_POINT3(l_copy, l);
-    multiply_vector(l_copy, -1, l_copy);
+    MVEC(l_copy, -1, l_copy);
     normalize(l_copy);
 
     /* Calculate reflection direction R */
-    double tmp = dot_product(n, l_copy);
-    multiply_vector(n, tmp, middle);
-    multiply_vector(middle, 2, middle);
-    subtract_vector(middle, l_copy, r);
+    double tmp = DOT(n, l_copy);
+    MVEC(n, tmp, middle);
+    MVEC(middle, 2, middle);
+    SUB_VEC(middle, l_copy, r);
     normalize(r);
 
-    /* diffuse = max(0, dot_product(n, -l)) */
-    *diffuse = MAX(0, dot_product(n, l_copy));
+    /* diffuse = max(0, DOT(n, -l)) */
+    *diffuse = MAX(0, DOT(n, l_copy));
 
-    /* specular = (dot_product(r, -d))^p */
-    *specular = pow(MAX(0, dot_product(r, d_copy)), phong_pow);
+    /* specular = (DOT(r, -d))^p */
+    *specular = pow(MAX(0, DOT(r, d_copy)), phong_pow);
 }
 
 /* @param r direction of reflected ray
@@ -196,8 +197,8 @@ static void compute_specular_diffuse(double *diffuse,
 static void reflection(point3 r, const point3 d, const point3 n)
 {
     /* r = d - 2(d . n)n */
-    multiply_vector(n, -2.0 * dot_product(d, n), r);
-    add_vector(r, d, r);
+    MVEC(n, -2.0 * DOT(d, n), r);
+    ADD(r, d, r);
 }
 
 /* reference: https://www.opengl.org/sdk/docs/man/html/refract.xhtml */
@@ -205,15 +206,15 @@ static void refraction(point3 t, const point3 I, const point3 N,
                        double n1, double n2)
 {
     double eta = n1 / n2;
-    double dot_NI = dot_product(N,I);
+    double dot_NI = DOT(N,I);
     double k = 1.0 - eta * eta * (1.0 - dot_NI * dot_NI);
     if (k < 0.0 || n2 <= 0.0)
         t[0] = t[1] = t[2] = 0.0;
     else {
         point3 tmp;
-        multiply_vector(I, eta, t);
-        multiply_vector(N, eta * dot_NI + sqrt(k), tmp);
-        subtract_vector(t, tmp, t);
+        MVEC(I, eta, t);
+        MVEC(N, eta * dot_NI + sqrt(k), tmp);
+        SUB_VEC(t, tmp, t);
     }
 }
 
@@ -231,8 +232,8 @@ static double fresnel(const point3 r, const point3 l,
     /* TIR */
     if (length(l) < 0.99)
         return 1.0;
-    double cos_theta_i = -dot_product(r, normal);
-    double cos_theta_t = -dot_product(l, normal);
+    double cos_theta_i = -DOT(r, normal);
+    double cos_theta_t = -DOT(l, normal);
     double r_vertical_root = (n1 * cos_theta_i - n2 * cos_theta_t) /
                              (n1 * cos_theta_i + n2 * cos_theta_t);
     double r_parallel_root = (n2 * cos_theta_i - n1 * cos_theta_t) /
@@ -254,8 +255,8 @@ static intersection ray_hit_object(const point3 e, const point3 d,
     *hit_sphere = NULL;
 
     point3 biased_e;
-    multiply_vector(d, t0, biased_e);
-    add_vector(biased_e, e, biased_e);
+    MVEC(d, t0, biased_e);
+    ADD(biased_e, e, biased_e);
 
     double nearest = t1;
     intersection result, tmpresult;
@@ -305,15 +306,15 @@ static void rayConstruction(point3 d, const point3 u, const point3 v,
     double v_s = ymax + ((ymin - ymax) * (float) j / (height - 1));
 
     /* s = e + u_s * u + v_s * v + w_s * w */
-    multiply_vector(u, u_s, u_tmp);
-    multiply_vector(v, v_s, v_tmp);
-    multiply_vector(w, w_s, w_tmp);
-    add_vector(view->vrp, u_tmp, s);
-    add_vector(s, v_tmp, s);
-    add_vector(s, w_tmp, s);
+    MVEC(u, u_s, u_tmp);
+    MVEC(v, v_s, v_tmp);
+    MVEC(w, w_s, w_tmp);
+    ADD(view->vrp, u_tmp, s);
+    ADD(s, v_tmp, s);
+    ADD(s, w_tmp, s);
 
     /* p(t) = e + td = e + t(s - e) */
-    subtract_vector(s, view->vrp, d);
+    SUB_VEC(s, view->vrp, d);
     normalize(d);
 }
 
@@ -325,11 +326,11 @@ static void calculateBasisVectors(point3 u, point3 v, point3 w,
     normalize(w);
 
     /* u = (t x w) / (|t x w|) */
-    cross_product(w, view->vup, u);
+    CDOT(w, view->vup, u);
     normalize(u);
 
     /* v = w x u */
-    cross_product(u, w, v);
+    CDOT(u, w, v);
 
     normalize(v);
 }
@@ -381,8 +382,8 @@ static unsigned int ray_color(const point3 e, double t,
 
     for (light_node light = lights; light; light = light->next) {
         /* calculate the intersection vector pointing at the light */
-        subtract_vector(ip.point, light->element.position, l);
-        multiply_vector(l, -1, _l);
+        SUB_VEC(ip.point, light->element.position, l);
+        MVEC(l, -1, _l);
         normalize(_l);
         /* check for intersection with an object. use ignore_me
          * because we don't care about this normal
@@ -427,10 +428,10 @@ static unsigned int ray_color(const point3 e, double t,
         if (ray_color(ip.point, MIN_DISTANCE, r, stk, rectangulars, spheres,
                       lights, reflection_part,
                       bounces_left - 1)) {
-            multiply_vector(reflection_part, R * (1.0 - fill.Kd) * fill.R,
-                            reflection_part);
-            add_vector(object_color, reflection_part,
-                       object_color);
+            MVEC(reflection_part, R * (1.0 - fill.Kd) * fill.R,
+                 reflection_part);
+            ADD(object_color, reflection_part,
+                object_color);
         }
         stk->top = old_top;
     }
@@ -441,10 +442,10 @@ static unsigned int ray_color(const point3 e, double t,
         if (ray_color(ip.point, MIN_DISTANCE, rr, stk,rectangulars, spheres,
                       lights, refraction_part,
                       bounces_left - 1)) {
-            multiply_vector(refraction_part, (1 - R) * fill.T,
-                            refraction_part);
-            add_vector(object_color, refraction_part,
-                       object_color);
+            MVEC(refraction_part, (1 - R) * fill.T,
+                 refraction_part);
+            ADD(object_color, refraction_part,
+                object_color);
         }
     }
 
@@ -453,46 +454,70 @@ static unsigned int ray_color(const point3 e, double t,
 }
 
 /* @param background_color this is not ambient light */
-void raytracing(uint8_t *pixels, color background_color,
-                rectangular_node rectangulars, sphere_node spheres,
-                light_node lights, const viewpoint *view,
-                int width, int height)
+void ray(void* args)
 {
-    point3 u, v, w, d;
+    arg *data = (arg*) args;
     color object_color = { 0.0, 0.0, 0.0 };
+    point3 u, v, w, d;
 
-    /* calculate u, v, w */
+    const viewpoint *view = (*data).View;
+    color back = { 0.0 , 0.1 , 0.1 };
+    uint8_t *pixels = (*data).pixels;
     calculateBasisVectors(u, v, w, view);
 
     idx_stack stk;
 
-    int factor = sqrt(SAMPLES);
-    for (int j = 0; j < height; j++) {
-        for (int i = 0; i < width; i++) {
+    for (int j = (*data).start_j ; j < 512; j+=MAXX) {
+        for (int i = 0; i < 512; i++) {
             double r = 0, g = 0, b = 0;
             /* MSAA */
             for (int s = 0; s < SAMPLES; s++) {
                 idx_stack_init(&stk);
                 rayConstruction(d, u, v, w,
-                                i * factor + s / factor,
-                                j * factor + s % factor,
+                                i * 2 + s / 2,
+                                j * 2 + s % 2,
                                 view,
-                                width * factor, height * factor);
-                if (ray_color(view->vrp, 0.0, d, &stk, rectangulars, spheres,
-                              lights, object_color,
+                                1024, 1024);
+                if (ray_color(view->vrp, 0.0, d, &stk,(*data).rectangulars,
+                              (*data).spheres, (*data).lights, object_color,
                               MAX_REFLECTION_BOUNCES)) {
                     r += object_color[0];
                     g += object_color[1];
                     b += object_color[2];
                 } else {
-                    r += background_color[0];
-                    g += background_color[1];
-                    b += background_color[2];
+                    r += back[0];
+                    g += back[1];
+                    b += back[2];
                 }
-                pixels[((i + (j * width)) * 3) + 0] = r * 255 / SAMPLES;
-                pixels[((i + (j * width)) * 3) + 1] = g * 255 / SAMPLES;
-                pixels[((i + (j * width)) * 3) + 2] = b * 255 / SAMPLES;
+
+                pixels[((i + (j * 512)) * 3) + 0] = r * 63.75;
+                pixels[((i + (j * 512)) * 3) + 1] = g * 63.75;
+                pixels[((i + (j * 512)) * 3) + 2] = b * 63.75;
+
             }
         }
     }
+}
+
+void raytracing(uint8_t *pixels, color background_color,
+                rectangular_node rectangulars, sphere_node spheres,
+                light_node lights, const viewpoint *view,
+                int width, int height)
+{
+    arg data[MAXX];
+    pthread_t THREAD[MAXX];
+
+    for(int i=0; i<MAXX; i++) {
+        data[i].pixels = pixels;
+        data[i].lights = lights;
+        data[i].rectangulars = rectangulars;
+        data[i].spheres = spheres;
+        data[i].View = view;
+        data[i].start_j = i;
+        pthread_create(&THREAD[i],NULL,(void*)ray,(void*)&data[i]);
+    }
+
+    for(int i=0; i<MAXX; i++)
+        pthread_join(THREAD[i],NULL);
+
 }

@@ -51,13 +51,13 @@ int main()
     clock_gettime(CLOCK_REALTIME, &start);
     raytracing(pixels, background,
                rectangulars, spheres, lights, &view, ROWS, COLS);
+
     clock_gettime(CLOCK_REALTIME, &end);
     {
         FILE *outfile = fopen(OUT_FILENAME, "wb");
         write_to_ppm(outfile, pixels, ROWS, COLS);
         fclose(outfile);
     }
-
     delete_rectangular_list(&rectangulars);
     delete_sphere_list(&spheres);
     delete_light_list(&lights);
